@@ -187,12 +187,88 @@ finalCalls.to_csv("percentDifference_Chong_99Percentile_1p5MADThreshold.csv")
 
 
 
+
+
+
+
+
+
+
+
+
+
 # %%
+# Calculating the coefficient of variation and comparing with
+# protein abundance in molecules per cell
+
+data = pd.read_csv("/Users/brandonho/Dropbox (Grant Brown's Lab)/Complete Data (Brandon Ho)/Year 7/wildtypeLocalizationScreenAnalysis/20211212_WTHU_RawCalls.csv")
+
+CVquantification = pd.DataFrame([])
+
+count = 0
+
+for i in np.unique(data['StrainID']):
+
+    count = count + 1
+    print(count)
+
+    coefVar = []
+    time = []
+    strainID = []
+    totalCells = []
+
+    proteinSubset = data[data['StrainID']==i]
+
+    for j in np.unique(proteinSubset['TimePoint']):
+
+        # Calculate CV at each time point
+        timeSubset = proteinSubset[proteinSubset['TimePoint'] == j]
+
+        # Coefficien variation function
+        cv = lambda x: np.std(x, ddof=1) / np.mean(x) * 100
+
+        coefVar.append(cv(timeSubset['95thPercentile']))
+
+        time.append(j)
+        strainID.append(i)
+        totalCells.append(len(timeSubset))
+
+    # Assemble the above data into a dataframe, and merge with the final
+    # quantification table so that we can group all proteins and treatments
+    # together
+    proteinCalls = {
+        'Strain' : strainID,
+        'TimePoint' : time,
+        'CoefficientVariation' : coefVar,
+        'TotalNumbers' : totalCells
+    }
+
+    proteinCalls = pd.DataFrame(proteinCalls)
+    CVquantification = pd.concat([CVquantification, proteinCalls])
 
 
-x = finalCalls[finalCalls['log2FoldChange'] > -1000]
-sns.violinplot(x['log2FoldChange'])
 
-plt.savefig("violinLog2FoldChange.pdf")
+# %%
+fileGuide = pd.read_csv("/Users/brandonho/Dropbox (Grant Brown's Lab)/Complete Data (Brandon Ho)/Year 6/Paper_Figures_Tables/CSVFilesForAnalysis/LocalizationQuantification/FileGuide.csv")
+ORFs = pd.read_csv("/Users/brandonho/Dropbox (Grant Brown's Lab)/Complete Data (Brandon Ho)/Year 6/Paper_Figures_Tables/CSVFilesForAnalysis/LocalizationQuantification/Mec1 Data Complete.csv")
+
+fileGuideSubset = fileGuide[['Strain', 'ORF']]
+ORFsubset = ORFs[['ORF', 'Gene']]
+
+strainIDToORF = pd.merge(fileGuideSubset, ORFsubset)
+
+CVquantificationWGene = pd.merge(CVquantification, strainIDToORF)
+
+
+CVfinal = CVquantificationWGene.pivot(index='Gene', columns='TimePoint', values='CoefficientVariation')
+
+
+
+desktopPath = "/Users/brandonho/Desktop"
+os.chdir(desktopPath)
+
+CVfinal.to_csv("HU_CV.csv")
+
+
 
 # %%
