@@ -271,4 +271,129 @@ CVfinal.to_csv("HU_CV.csv")
 
 
 
+
+
+
+
+
+
+
+# %%
+commonHits=pd.read_csv("/Users/brandonho/Dropbox (Grant Brown's Lab)/Complete Data (Brandon Ho)/Year 7/wildtypeLocalizationScreenAnalysis/HUandMMS_CommonHits.csv")
+data=pd.read_csv("/Users/brandonho/Dropbox (Grant Brown's Lab)/Complete Data (Brandon Ho)/Year 7/wildtypeLocalizationScreenAnalysis/20210809_HUMMS_penetrance.csv")
+
+targetColumns=['Gene',
+               'MMS0', 'MMS30', 'MMS60', 'MMS90', 'MMS120', 'MMS180', 'MMS240',
+               'HU0', 'HU30', 'HU60', 'HU90', 'HU120', 'HU180', 'HU240']
+
+data=data[targetColumns]
+
+data = data[data['Gene'].isin(commonHits['CommonHits'])]
+dataBackup = data.copy()
+
+
+
+# %%
+# First, figure out what the average rate is for each protein
+
+def avgRate(x):
+    max = np.max(x)
+    min = np.min(x)
+    return((max-min)/240)
+
+data['MMSavgRate']=data.iloc[:,1:8].apply(avgRate, axis=1)
+data['HUavgRate']=data.iloc[:,8:15].apply(avgRate, axis=1)
+
+data['MMSmax']=data.iloc[:,1:8].apply(np.max, axis=1)
+data['HUmax']=data.iloc[:,8:15].apply(np.max, axis=1)
+
+
+
+
+# %%
+data['pMaxMMS_0']=data['MMS0']/data['MMSmax']
+data['pMaxMMS_30']=data['MMS30']/data['MMSmax']
+data['pMaxMMS_60']=data['MMS60']/data['MMSmax']
+data['pMaxMMS_90']=data['MMS90']/data['MMSmax']
+data['pMaxMMS_120']=data['MMS120']/data['MMSmax']
+data['pMaxMMS_180']=data['MMS180']/data['MMSmax']
+data['pMaxMMS_240']=data['MMS240']/data['MMSmax']
+
+data['pMaxHU_0']=data['HU0']/data['HUmax']
+data['pMaxHU_30']=data['HU30']/data['HUmax']
+data['pMaxHU_60']=data['HU60']/data['HUmax']
+data['pMaxHU_90']=data['HU90']/data['HUmax']
+data['pMaxHU_120']=data['HU120']/data['HUmax']
+data['pMaxHU_180']=data['HU180']/data['HUmax']
+data['pMaxHU_240']=data['HU240']/data['HUmax']
+
+
+
+# %%
+
+MMS = data.iloc[:,19:25]
+MMSmat = MMS.to_numpy()
+
+
+HU = data.iloc[:,27:33]
+HUmat = HU.to_numpy()
+
+diff = pd.DataFrame(np.log2(MMSmat/HUmat))
+diff.index=data['Gene']
+diff[diff < -100] = 0
+diff[diff > 100] = 0
+
+
+# %%
+# Now Kmeans this thing
+
+kmeans = KMeans(
+    init="random",
+    n_clusters=4,
+    n_init=10,
+    max_iter=300,
+    random_state=42
+)
+
+kmeans.fit(diff)
+diff['Cluster'] = kmeans.labels_
+diff = diff.sort_values(by='Cluster')
+
+# sns.color_palette("icefire", as_cmap=True)
+sns.heatmap(diff.iloc[:,0:6],
+            # cmap=sns.diverging_palette(250, 30, l=65, center="dark", as_cmap=True),
+            cmap='vlag',
+            center=0,
+            vmin=-3,
+            vmax=3)
+
+# os.chdir("/Users/brandonho/Desktop/")
+# plt.savefig('heatmap.pdf')
+
+
+# %%
+
+sns.regplot(x='MMSavgRate', y='HUavgRate', data=data)
+plt.savefig('correlationplot.pdf')
+
+
+
+# %%
+
+correlation = []
+
+for i in np.unique(data['Gene']):
+
+    dataSubset = data[data['Gene']==i]
+
+    MMSvals = dataSubset.iloc[0,1:8]
+    HUvals = dataSubset.iloc[0,8:15]
+
+    correlation.append(stats.pearsonr(MMSvals, HUvals)[0])
+
+correlation = pd.DataFrame(correlation)
+correlation.columns = ['CorVal']
+
+
+
 # %%
