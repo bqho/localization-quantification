@@ -1,5 +1,7 @@
 # Quantification of changes in protein localization for single cell images
 
+![repository-banner](assets/yeast-image.png)
+
 The following repository contains the code, sample data sets, and work flow for measuring changes in protein-GFP subcellular localization as described in:
 
 ### Phenotypic heterogeneity in the DNA replication stress response revealed by quantiative protein dynamics measurements
