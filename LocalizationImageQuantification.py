@@ -7,21 +7,17 @@ import PIL
 import glob
 import os
 
-
 # Import custom modules
 import AcquireMetadata.acquireMetadata as meta
 
 
 
 #%%
-# associate protein and treatment for each of the images
-# using function from metadata acquisition module
-
+# associate protein and treatment for each of the images using function from metadata acquisition module
 imageIndex = meta.getImgIndex("/Volumes/Seagate Portabl/ChongAnalysis_OutputFiles")
 
 
 # Filter out the segmented single cells from the original GFP full image
-
 def imgOrSeg(x):
     if x.find("TotalCell") > 0:
         return("segmentation")
@@ -35,97 +31,132 @@ segIndex = imageIndex[imageIndex['ImageType'] == 'segmentation']
 
 
 
-
-
-
 # %%
-# Then run the main function of the localization analysis pipeline.
-# Open image and segmentation, and determine the intensity distributions
-
-threshold = 99
-
-pixvalTP_DF = pd.DataFrame([])
-start = 1000
-end = len(imgIndex)
-
-# count = 0
+# Run  main function of the localization analysis pipeline.
+# Opens image and segmentation, and determine the intensity distributions
 
 
-# FOR LOOP START #
-############################################################################################
-print('function started')
-for i in np.arange(0, len(imgIndex), 1):
+def LOC_quant(imgIndex, segIndex, threshold):
+    """Main localization quantification function. Takes the list of
+    files in the image and segmentation dataframes generated above, and
+    uses it as a guide to open the appropriate image and segmentation files,
+    then calculating the pixel intensity distributions.
 
-    img_pxMAT = np.asmatrix(Image.open(imgIndex.iloc[i,0]))
+    Args:
+        imgIndex (dataframe): Dataframe containing the file path for all image files
+        segIndex (dataframe): Dataframe containing the file path for all segmentation
+        files
+        threshold (int): A value between 0-100 that represents the percentile
+        of the intensity distribution to calculate per cell (the LOC score)
+    """
+    pixvalTP_DF = pd.DataFrame([])
+    start = 0
+    end = len(imgIndex)
+
+    count = 0
+
+    # A for loop to go through each image file, find the corresponding
+    # segmentation file, and extract the single cell intensity distribution
     
-    if np.amax(img_pxMAT) == 0:
-        continue
+    print('function started')
 
-    Protein = imgIndex.iloc[i,:]['Protein']
-    Treatment = imgIndex.iloc[i,:]['Treatment']
+    for i in np.arange(0, len(imgIndex), 1):
 
-    # The segmentation images are in the same folder as the imgIndex
-    segPath = imgIndex.iloc[i,:]['Folder']
-    segImages = segIndex[segIndex['Folder'] == segPath]
-
-    if len(segImages) == 0:
-        continue
-
-    objMeas_DF = pd.DataFrame([])
-
-    for k in np.arange(0, len(segImages), 1):
-
-        object_measurements = []
+        # Opens images and reads as numeric matrix
+        image_matrix = np.asmatrix(Image.open(imgIndex.iloc[i,0]))
         
-        object_pxMAT = np.asmatrix(Image.open(segImages.iloc[k,0]))
-        object_pxMAT_modify = object_pxMAT.copy()
-        object_pxMAT_modify.setflags(write=1)
-        object_pxMAT_modify[object_pxMAT_modify == 255] = 1
-
-        rawGFP_object = np.multiply(object_pxMAT_modify, img_pxMAT)
-        rawGFP_object = np.array(rawGFP_object, dtype = np.uint16)
-
-        rawGFP_object = rawGFP_object[rawGFP_object > 0] 
-
-        if len(rawGFP_object) == 0:
+        if np.amax(image_matrix) == 0:
             continue
 
-        factor = np.median(rawGFP_object)
-        normGFP_object = rawGFP_object/factor
-        
-        normGFP_object = np.percentile(normGFP_object, threshold)
-        #normGFP_object = np.percentile(normGFP_object, threshold) - np.percentile(normGFP_object, (100-threshold))
-        
-        x95th = np.median(normGFP_object)
-        CellSize = len(rawGFP_object)
-                    
-        object_measurements = {'Protein' : Protein,
-                               'Treatment' : Treatment,
-                               'ObjectNumber' : segImages.iloc[k,0],
-                               'x95thPercentile' : [x95th],
-                               'CellSize' : [CellSize],
-                               'CellMedian' : [factor]}
+        Protein = imgIndex.iloc[i,:]['Protein']
+        Treatment = imgIndex.iloc[i,:]['Treatment']
 
-        object_measurements = pd.DataFrame(object_measurements)
-        object_measurements.columns = ['Protein', 'Treatment', 
-                                       'ObjectNumber',
-                                       '95thPercentile',
-                                       'CellSize',
-                                       'CellMedian']
-        
-        objMeas_DF = pd.concat([objMeas_DF, object_measurements])
+        # The segmentation images are in the same folder as the imgIndex
+        segPath = imgIndex.iloc[i,:]['Folder']
+        segImages = segIndex[segIndex['Folder'] == segPath]
 
-    pixvalTP_DF = pd.concat([pixvalTP_DF, objMeas_DF])
-    # count = count + 1
-    # print(str(count) + " out of " + str(len(imgIndex)))
-print('function ended')
+        if len(segImages) == 0:
+            continue
+
+        objMeas_DF = pd.DataFrame([])
+
+        for k in np.arange(0, len(segImages), 1):
+
+            object_measurements = []
+            
+            # Pixels corresponding to identified cells by CellProfiler in the
+            # segmentation image are given a value of 1, and outside of the cell
+            # is given a value of 0
+            cell_object = np.asmatrix(Image.open(segImages.iloc[k,0]))
+            cell_object_matrix = cell_object.copy()
+            cell_object_matrix.setflags(write=1)
+            cell_object_matrix[cell_object_matrix == 255] = 1
+
+            # Multipling the cell_object_matrix with the raw image_matrix results 
+            # in all pixels outside of the cell being 0, and inside the cell unchanged
+            raw_GFP_matrix = np.multiply(cell_object_matrix, image_matrix)
+            raw_GFP_matrix = np.array(raw_GFP_matrix, dtype = np.uint16)
+
+            # extract only the pixel intensities greater than 0, corresponding
+            # to the intensities inside the cell
+            raw_GFP_matrix = raw_GFP_matrix[raw_GFP_matrix > 0] 
+
+            if len(raw_GFP_matrix) == 0:
+                continue
+
+            # Normalization: divide by meadian to account for abundance changes
+            factor = np.median(raw_GFP_matrix)
+            normalized_GFP_object = raw_GFP_matrix/factor
+            
+            # Most important line: determining the LOC score! This gets the value of the
+            # designated percentile of the cell intensity distribution
+            normalized_GFP_object = np.percentile(normalized_GFP_object, threshold)
+            LOC_score = np.median(normalized_GFP_object)
+
+            # Obtain the size of the cell, in # of pixels
+            cell_size = len(raw_GFP_matrix)
+                        
+            object_measurements = {'Protein' : Protein,
+                                   'Treatment' : Treatment,
+                                   'ObjectNumber' : segImages.iloc[k,0],
+                                   'x95thPercentile' : [LOC_score],
+                                   'CellSize' : [cell_size],
+                                   'CellMedian' : [factor]}
+
+            object_measurements = pd.DataFrame(object_measurements)
+            object_measurements.columns = ['Protein',
+                                           'Treatment', 
+                                           'ObjectNumber',
+                                           '95thPercentile',
+                                           'CellSize',
+                                           'CellMedian']
+            
+            objMeas_DF = pd.concat([objMeas_DF, object_measurements])
+
+        pixvalTP_DF = pd.concat([pixvalTP_DF, objMeas_DF])
+
+        # Grey next section out if you do not want to keep track of the
+        # progress - printing to console will significantly slow down
+        # analysis if you have a large number of files
+
+        # --- Optional section --- #
+        count = count + 1
+        print(str(count) + " out of " + str(len(imgIndex)))
+        # --- Optional section --- #
+
+    print('function ended')
+    return(pixvalTP_DF)
 
 
 
-desktop_path = "/Users/brandonho/Desktop/"
-os.chdir(desktop_path)
+#%%
+# Save the resulting quantification in user-defined directory
+directory_path = "/Users/brandonho/Desktop/" # write out full path of directory
+os.chdir(directory_path)
 
-pixvalTP_DF.to_csv('20211206_ChongHitsAnalyzed_ProperAnalysis_99Percentile_Part3.csv')
+# Name your file
+localization_quantification = LOC_quant(imgIndex, segIndex, threshold = 99)
+localization_quantification.to_csv('enter_file_name.csv')
 
 
 # %%

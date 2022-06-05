@@ -63,14 +63,3 @@ def getImgIndex(imageLocation):
     imgIndex = imgIndex[imgIndex['Series'] == 'pass']
 
     return(imgIndex)
-
-
-
-
-# %%
-# With the chong data, the segmentation files are also in the image index
-# dataframe we just created. And we just need to subset those that have
-# the annotation "TotalCell"
-
-
-
