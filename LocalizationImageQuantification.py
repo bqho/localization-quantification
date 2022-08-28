@@ -1,5 +1,7 @@
 # %%
-# Import modules required for analysis
+# Import modules required for analysis_________________________________________
+
+# Import modules
 import pandas as pd
 import numpy as np
 from PIL import Image
@@ -8,31 +10,37 @@ import glob
 import os
 
 # Import custom modules
-import AcquireMetadata.acquireMetadata as meta
+import acquire_metadata.acquireMetadata as meta
 
 
 
 #%%
-# associate protein and treatment for each of the images using function from metadata acquisition module
-imageIndex = meta.getImgIndex("/Volumes/Seagate Portabl/ChongAnalysis_OutputFiles")
+# Run functions to obtain metadata, associating protein identity, time of
+# drug treatments, etc. for each image ________________________________________
+
+# Apply function, enter path to images
+image_path = "/Volumes/Seagate Portabl/ChongAnalysis_OutputFiles" #image path
+imageIndex = meta.getImgIndex(image_path)
 
 
-# Filter out the segmented single cells from the original GFP full image
+# Folder contains both the original raw images from the OPERA microscope,
+# as well as the segmented images after running the CellProfiler pipeline.
+# Following function designates if the image is raw image or segmented image
 def imgOrSeg(x):
     if x.find("TotalCell") > 0:
         return("segmentation")
     else:
         return("image")
 
+# Apply function, and generate dataframe with file meta data and image paths
 imageIndex['ImageType'] = pd.Series(imageIndex.iloc[:,0]).apply(imgOrSeg)
-
 imgIndex = imageIndex[imageIndex['ImageType'] == 'image']
 segIndex = imageIndex[imageIndex['ImageType'] == 'segmentation']
 
 
 
 # %%
-# Run  main function of the localization analysis pipeline.
+# Run main function of the localization analysis pipeline.
 # Opens image and segmentation, and determine the intensity distributions
 
 
