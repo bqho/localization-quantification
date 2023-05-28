@@ -29,3 +29,7 @@ R 4.2 +
 ## Additional & contact information
 
 Feel free to [contact me](brandon.ho@mail.utoronto.ca) for questions, requests, etc. An interactive / GUI version is in the works for small-scale image analyses. 
+
+
+## Reference
+Ho et al. eLife 2023;12:e82483. DOI: https://doi.org/10.7554/eLife.82483
